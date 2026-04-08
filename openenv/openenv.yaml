@@ -1,0 +1,155 @@
+name: github-pr-review
+version: "1.0.0"
+description: >
+  OpenEnv environment simulating GitHub pull request code review.
+  The agent reads code diffs and identifies bugs, security vulnerabilities,
+  logic errors, and performance issues across three difficulty levels.
+
+tags:
+  - openenv
+  - code-review
+  - security
+  - software-engineering
+
+environment:
+  class: PRReviewEnvironment
+  module: app.environment.env
+
+  observation:
+    type: object
+    description: Current PR diff context and agent comment history
+    fields:
+      pr_title:
+        type: string
+      pr_description:
+        type: string
+      file_diffs:
+        type: array
+        items:
+          type: object
+          fields:
+            filename: {type: string}
+            language: {type: string}
+            before: {type: string}
+            after: {type: string}
+            diff_lines: {type: array, items: {type: string}}
+      previous_comments:
+        type: array
+        items:
+          type: object
+          fields:
+            file: {type: string}
+            line: {type: integer, nullable: true}
+            issue_type: {type: string, enum: [bug, logic, performance, security, style, other]}
+            comment: {type: string}
+            suggestion: {type: string, nullable: true}
+      step_count: {type: integer}
+      max_steps: {type: integer}
+      task_id: {type: string}
+
+  action:
+    type: object
+    description: A single review comment identifying one code issue
+    fields:
+      file:
+        type: string
+        description: Filename being commented on
+      line:
+        type: integer
+        nullable: true
+        description: Line number (optional)
+      issue_type:
+        type: string
+        enum: [bug, logic, performance, security, style, other]
+      comment:
+        type: string
+        description: Human-readable issue description
+      suggestion:
+        type: string
+        nullable: true
+        description: Optional fix suggestion
+      done:
+        type: boolean
+        description: True when agent considers review complete
+
+  reward:
+    type: object
+    description: Non-binary reward signal with partial credit
+    fields:
+      value:
+        type: float
+        range: [-1.0, 1.0]
+        description: Step reward (+0.3 critical, +0.2 normal, -0.1 false positive, -0.05 duplicate)
+      reason: {type: string}
+      correct_issues_found: {type: integer}
+      total_issues: {type: integer}
+      false_positives: {type: integer}
+      cumulative_score:
+        type: float
+        range: [0.0, 1.0]
+
+  methods:
+    reset:
+      returns: Observation
+      description: Resets episode state and returns the initial observation
+    step:
+      args:
+        action: Action
+      returns: [Observation, Reward, bool, dict]
+      description: Apply action, return next observation, reward, done flag, and info dict
+    state:
+      returns: EpisodeState
+      description: Return full internal episode state
+
+tasks:
+  - id: task1
+    difficulty: easy
+    description: Detect simple bugs in an authentication module (Python)
+    max_steps: 8
+    grader: deterministic
+    scoring:
+      formula: "(correct_found / total_issues) - (false_positives * 0.1)"
+      clamp: [0.0, 1.0]
+
+  - id: task2
+    difficulty: medium
+    description: Detect logic and performance issues in an e-commerce backend
+    max_steps: 10
+    grader: deterministic
+    scoring:
+      formula: "(correct_found / total_issues) - (false_positives * 0.1)"
+      clamp: [0.0, 1.0]
+
+  - id: task3
+    difficulty: hard
+    description: Detect security vulnerabilities across multiple files (Flask API)
+    max_steps: 12
+    grader: deterministic
+    scoring:
+      formula: "(correct_found / total_issues) - (false_positives * 0.1)"
+      clamp: [0.0, 1.0]
+
+episode:
+  termination_conditions:
+    - all_issues_found
+    - max_steps_reached
+    - agent_signals_done
+
+server:
+  host: 0.0.0.0
+  port: 7860
+  framework: fastapi
+  endpoints:
+    - POST /reset
+    - POST /step
+    - GET /state
+    - GET /health
+
+docker:
+  base_image: python:3.11-slim
+  port: 7860
+
+huggingface:
+  space_sdk: docker
+  tags:
+    - openenv
