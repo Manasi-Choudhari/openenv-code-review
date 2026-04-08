@@ -1,0 +1,19 @@
+[project]
+name = "openenv-pr-review"
+version = "0.1.0"
+description = "OpenEnv PR Review Environment"
+authors = [
+    { name = "Your Name" }
+]
+dependencies = [
+    "fastapi",
+    "uvicorn",
+    "pydantic",
+    "openenv-core>=0.2.0"
+]
+
+[project.scripts]
+server = "server:app"
+
+[tool.setuptools.packages.find]
+where = ["."]
